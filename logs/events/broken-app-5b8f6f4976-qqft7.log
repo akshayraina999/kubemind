@@ -1,0 +1,9 @@
+Events:
+  Type     Reason     Age                  From               Message
+  ----     ------     ----                 ----               -------
+  Normal   Scheduled  4m13s                default-scheduler  Successfully assigned kubemind/broken-app-5b8f6f4976-qqft7 to minikube
+  Normal   Pulling    61s (x5 over 4m12s)  kubelet            spec.containers{broken-app}: Pulling image "nginx:notfound"
+  Warning  Failed     50s (x5 over 4m10s)  kubelet            spec.containers{broken-app}: Failed to pull image "nginx:notfound": Error response from daemon: manifest for nginx:notfound not found: manifest unknown: manifest unknown
+  Warning  Failed     50s (x5 over 4m10s)  kubelet            spec.containers{broken-app}: Error: ErrImagePull
+  Normal   BackOff    14s (x14 over 4m9s)  kubelet            spec.containers{broken-app}: Back-off pulling image "nginx:notfound"
+  Warning  Failed     14s (x14 over 4m9s)  kubelet            spec.containers{broken-app}: Error: ImagePullBackOff

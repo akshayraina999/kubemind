@@ -1,0 +1,9 @@
+# Generated files
+logs/*
+reports/*
+state/*
+
+# Keep directory structure
+!logs/.gitkeep
+!reports/.gitkeep
+!state/.gitkeep

@@ -1,6 +1,7 @@
 Events:
   Type     Reason   Age                      From     Message
   ----     ------   ----                     ----     -------
-  Warning  Failed   50m (x67 over 2d1h)      kubelet  spec.containers{broken-app}: Failed to pull image "nginx:notfound": Error response from daemon: manifest for nginx:notfound not found: manifest unknown: manifest unknown
-  Normal   BackOff  9m24s (x1612 over 2d1h)  kubelet  spec.containers{broken-app}: Back-off pulling image "nginx:notfound"
-  Warning  Failed   9m24s (x1612 over 2d1h)  kubelet  spec.containers{broken-app}: Error: ImagePullBackOff
+  Normal   Pulling  87m (x100 over 2d4h)     kubelet  spec.containers{broken-app}: Pulling image "nginx:notfound"
+  Warning  Failed   87m (x97 over 2d4h)      kubelet  spec.containers{broken-app}: Failed to pull image "nginx:notfound": Error response from daemon: manifest for nginx:notfound not found: manifest unknown: manifest unknown
+  Normal   BackOff  2m18s (x2352 over 2d4h)  kubelet  spec.containers{broken-app}: Back-off pulling image "nginx:notfound"
+  Warning  Failed   2m18s (x2352 over 2d4h)  kubelet  spec.containers{broken-app}: Error: ImagePullBackOff

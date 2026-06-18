@@ -45,4 +45,6 @@ jq -n \
 curl -s http://localhost:11434/api/generate \
 -H "Content-Type: application/json" \
 -d @- |
-jq -r '.response'
+jq -r '.response' > "logs/ai/${POD_NAME}.txt"
+
+cat "logs/ai/${POD_NAME}.txt"

@@ -1,0 +1,36 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "KubeMindRemediationPlan",
+  "type": "object",
+  "properties": {
+    "resource_type": { "type": "string" },
+    "resource_name": { "type": "string" },
+    "issue_type": { "type": "string" },
+    "root_cause": { "type": "string" },
+    "confidence": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+    "remediation": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "action_type": { "type": "string" },
+          "target_kind": { "type": "string" },
+          "target_name": { "type": "string" },
+          "patch_payload": { "type": "object" },
+          "fallback_command": {
+            "type": "string",
+            "description": "For high-risk or custom actions like Job creation, output a raw single-line or clean multi-line string command."
+            },
+          "risk": { "type": "string", "enum": ["Low", "Medium", "High"] },
+          "auto_executable": { "type": "boolean" }
+        },
+        "required": ["action_type", "target_kind", "target_name", "risk", "auto_executable"]
+      }
+    },
+    "verification": {
+      "type": "array",
+      "items": { "type": "string" }
+    }
+  },
+  "required": ["resource_type", "resource_name", "issue_type", "root_cause", "confidence", "remediation", "verification"]
+}

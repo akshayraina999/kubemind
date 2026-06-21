@@ -1,0 +1,17 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: failed-job
+  namespace: kubemind
+spec:
+  backoffLimit: 1
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+      - name: failed-job
+        image: busybox
+        command:
+        - sh
+        - -c
+        - exit 1

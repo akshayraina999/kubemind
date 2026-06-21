@@ -1,0 +1,24 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: restart-app
+  namespace: kubemind
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: restart-app
+  template:
+    metadata:
+      labels:
+        app: restart-app
+    spec:
+      containers:
+      - name: restart-app
+        image: busybox
+        command:
+        - sh
+        - -c
+        - |
+          echo "restarting"
+          exit 1

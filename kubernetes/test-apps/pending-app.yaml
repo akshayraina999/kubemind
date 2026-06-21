@@ -1,0 +1,21 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pending-app
+  namespace: kubemind
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: pending-app
+  template:
+    metadata:
+      labels:
+        app: pending-app
+    spec:
+      containers:
+      - name: pending-app
+        image: nginx
+        resources:
+          requests:
+            memory: "100Gi"

@@ -7,3 +7,11 @@ state/*
 !logs/.gitkeep
 !reports/.gitkeep
 !state/.gitkeep
+
+logs/events/*
+logs/context/*
+logs/ai/*
+logs/pods/*
+logs/remediation/*
+logs/verification/*
+!logs/**/.gitkeep

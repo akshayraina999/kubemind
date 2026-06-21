@@ -1,54 +1,299 @@
-Markdown
 # 🚀 KubeMind Infrastructure Setup & Run-Book
 
-Follow this configuration sequence to spin up the local KubeMind validation testing pipeline using an Apple Silicon MacBook or an equivalent development workspace.
+This guide walks through setting up and testing KubeMind locally using Minikube and Ollama.
 
 ---
 
-## 1. Local Prerequisites Configuration
+# 1. Prerequisites
 
-Before initiating the pipeline loop, ensure your development workstation has the following core command-line binaries installed and globally accessible in your shell `$PATH`:
+Ensure the following tools are installed and available in your shell `$PATH`:
 
-* **Minikube (v1.32+)** or an active local Docker Desktop context
-* **Ollama Engine** (Running locally via background daemon)
-* **jq** (High-performance lightweight command-line JSON processor)
+* **Kubernetes Cluster**
+
+  * Minikube (`v1.32+`) or Docker Desktop Kubernetes
+
+* **Local LLM Runtime**
+
+  * Ollama
+
+* **CLI Utilities**
+
+  * `kubectl`
+  * `jq`
+  * `bash`
+
+Verify installations:
+
+```bash
+kubectl version --client
+minikube version
+ollama --version
+jq --version
+```
 
 ---
 
-## 2. LLM Engine Model Hydration
+# 2. Start Your Local Kubernetes Cluster
 
-Ensure your local Ollama background engine daemon is fully active and initialized, then execute the standard model fetch to pull down the optimized engineering base model target:
+If using Minikube:
+
+```bash
+minikube start
+```
+
+Verify cluster access:
+
+```bash
+kubectl get nodes
+```
+
+You should see your local node in the `Ready` state.
+
+---
+
+# 3. Install and Start Ollama
+
+Start the Ollama daemon:
+
+```bash
+ollama serve
+```
+
+In another terminal, pull the model used by KubeMind:
 
 ```bash
 ollama pull qwen3:8b
-To verify that the model's localized JSON API endpoint router interface is responding properly over your machine's unified memory bus, execute a raw validation curl test string:
+```
 
-Bash
-curl -i -X POST http://localhost:11434/api/generate \
-  -d '{"model": "qwen3:8b", "prompt": "Output json: {\"status\": \"ok\"}", "stream": false, "format": "json"}'
-3. Sandboxed Application Manifest Provisioning
-Apply the provided buggy testing manifest definitions straight to your cluster to give the KubeMind scanning engine distinct anomaly vectors to isolate and troubleshoot:
+Verify that Ollama is working:
 
-Bash
-# Create the isolated environment namespace validation space
+```bash
+ollama run qwen3:8b "Return only JSON: {\"status\":\"ok\"}"
+```
+
+Expected output:
+
+```json
+{"status":"ok"}
+```
+
+---
+
+# 4. Create the Testing Namespace
+
+Create the isolated namespace used by KubeMind:
+
+```bash
 kubectl create namespace kubemind
+```
 
-# Hydrate the cluster with the sample failure application suites
+Verify:
+
+```bash
+kubectl get ns kubemind
+```
+
+---
+
+# 5. Deploy Sample Faulty Applications
+
+KubeMind currently ships with intentionally broken workloads for testing.
+
+Deploy them:
+
+```bash
 kubectl apply -f kubernetes/test-apps/broken-app.yaml -n kubemind
+kubectl apply -f kubernetes/test-apps/crash-app.yaml -n kubemind
 kubectl apply -f kubernetes/test-apps/oom-app.yaml -n kubemind
+kubectl apply -f kubernetes/test-apps/pending-app.yaml -n kubemind
 kubectl apply -f kubernetes/test-apps/failed-job.yaml -n kubemind
-4. Initializing Clean State Execution Runs
-To test your local environment with zero clutter or state metadata history, clear the logging tracing tracking rows and trigger your primary master pipeline intake suite:
+```
 
-Bash
-# Set up persistent empty logging framework paths cleanly
-mkdir -p logs/ai logs/context logs/events logs/pods logs/remediation logs/remediation-plans logs/verification reports state/processed
+Check workload status:
 
-# Seed empty tracking spaces with .gitkeep placeholders to maintain Git tree structure
-for dir in logs/ai logs/context logs/events logs/pods logs/remediation logs/remediation-plans logs/verification reports state/processed; do
-    touch "$dir/.gitkeep"
-done
+```bash
+kubectl get pods -n kubemind
+```
 
-# Clear out duplicate state tracker memory tokens and fire up the master loop once
-./cmd/kubemind.sh clear-state
-./cmd/kubemind.sh once
+---
+
+# 6. Initialize Local Workspace
+
+Create required directories:
+
+```bash
+mkdir -p \
+logs/context \
+logs/remediation \
+logs/remediation-plans \
+reports \
+state/processed
+```
+
+(Optional) preserve empty directories in Git:
+
+```bash
+touch logs/context/.gitkeep
+touch logs/remediation/.gitkeep
+touch logs/remediation-plans/.gitkeep
+touch reports/.gitkeep
+touch state/processed/.gitkeep
+```
+
+---
+
+# 7. Run the KubeMind Pipeline
+
+KubeMind currently operates as a pipeline of independent stages.
+
+## Step 1: Collect Kubernetes Context
+
+```bash
+./engine/collector.sh <pod-name>
+```
+
+Example:
+
+```bash
+./engine/collector.sh broken-app-5b8f6f4976-qqft7
+```
+
+This generates:
+
+```text
+logs/context/<pod-name>.txt
+```
+
+---
+
+## Step 2: Generate AI Remediation Plan
+
+```bash
+./ai/analyze.sh <pod-name>
+```
+
+Example:
+
+```bash
+./ai/analyze.sh broken-app-5b8f6f4976-qqft7
+```
+
+This invokes the local Ollama model and generates:
+
+```text
+logs/remediation-plans/<pod-name>.json
+```
+
+Example output:
+
+```json
+{
+  "resource_type": "Pod",
+  "resource_name": "broken-app-5b8f6f4976-qqft7",
+  "issue_type": "ImagePullFailure",
+  "root_cause": "Image nginx:notfound does not exist",
+  "confidence": 100,
+  "remediation": [
+    {
+      "action_type": "update_image",
+      "target_kind": "Deployment",
+      "target_name": "broken-app",
+      "command": "kubectl set image deployment/broken-app nginx=nginx:latest -n kubemind",
+      "risk": "low",
+      "auto_executable": true
+    }
+  ],
+  "verification": [
+    "kubectl get pods -n kubemind"
+  ]
+}
+```
+
+---
+
+## Step 3: Generate Executable Commands
+
+```bash
+./engine/remediator.sh <pod-name>
+```
+
+Example:
+
+```bash
+./engine/remediator.sh broken-app-5b8f6f4976-qqft7
+```
+
+Generated commands are written to:
+
+```text
+logs/remediation/<pod-name>.txt
+```
+
+---
+
+# 8. Current Workflow
+
+```text
+Kubernetes Pod
+       │
+       ▼
+collector.sh
+       │
+       ▼
+logs/context/*.txt
+       │
+       ▼
+analyze.sh
+(Local Ollama LLM)
+       │
+       ▼
+logs/remediation-plans/*.json
+       │
+       ▼
+remediator.sh
+       │
+       ▼
+Executable kubectl commands
+```
+
+---
+
+# 9. Current Project Status
+
+✅ Kubernetes context collection
+
+✅ Failure classification
+
+✅ Local LLM-based root cause analysis
+
+✅ Structured remediation plan generation
+
+✅ Command generation
+
+🚧 Safe command execution engine
+
+🚧 Verification engine
+
+🚧 Continuous cluster watcher
+
+🚧 Autonomous remediation approval workflow
+
+🚧 Multi-resource support (Nodes, PVCs, PDBs, etc.)
+
+---
+
+# 10. Clean Previous Runs
+
+Remove generated artifacts:
+
+```bash
+rm -rf logs/context/*
+rm -rf logs/remediation/*
+rm -rf logs/remediation-plans/*
+```
+
+Reset state tracking:
+
+```bash
+rm -rf state/processed/*
+```

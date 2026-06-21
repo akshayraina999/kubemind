@@ -1,109 +1,321 @@
-🧠 KubeMind: Self-Healing Kubernetes Platform Engineering Agent
-KubeMind is an intelligent, cloud-native DevOps agent designed to continuously scan Kubernetes namespaces, classify cluster anomalies (ImagePullBackOff, CrashLoopBackOff, OOMKilled, FailedScheduling), and safely apply localized infrastructure remediation strategies. By decoupling real-time data collection from a local LLM inference pipeline protected by deterministic validation syntax engines, KubeMind provides rapid, closed-loop troubleshooting without risking production stability.
+# 🧠 KubeMind
 
-🎯 Section 1: Product Scope & Core Objectives
-The Problem
-Traditional infrastructure monitoring frameworks (Prometheus, Grafana, Loki) excel at surfacing alerting states, but leave manual diagnostic processing (kubectl logs/describe), root cause analysis research, and active payload execution completely to an on-call engineer, creating an operations bottleneck.
+KubeMind is an AI-assisted Kubernetes troubleshooting engine that collects cluster context, analyzes failing workloads using a local LLM, and generates structured remediation plans.
 
-The Solution
-KubeMind bridges this gap by transforming reactive alerts into structured, self-healing pipelines. To guarantee safety, KubeMind treats generative AI as an untrusted advisory layer. The agent implements a strict separation of concerns:
+The project is designed as the foundation for a future self-healing Kubernetes platform engineering agent.
 
-Grammar Schema Constraints: Ollama token paths are rigidly bound to raw JSON outputs, completely suppressing chat verbiage.
+---
 
-Deterministic Filter Engine: A protective shell parser intercepts and drops truncated JSON string payloads or missing parameter tokens before calling active cluster APIs.
+# 🚀 What KubeMind Does Today
 
-Risk Matrix Routing: Low-risk actions (e.g., dead Job clearing) execute autonomously. Medium/High-risk alterations safely halt execution to await human operator authorization.
+KubeMind currently performs four major tasks:
 
-🏗️ Section 2: Core Architecture Blueprint
-KubeMind runs on a low-overhead loop processing data across four decoupled execution rings:
+1. **Collects detailed Kubernetes context**
+2. **Identifies failing workloads**
+3. **Sends workload context to a local LLM (Ollama)**
+4. **Generates remediation recommendations in structured JSON**
 
-Plaintext
-+------------------------------------------------------------------------+
-|                            Kubernetes Cluster                          |
-+-------------------+--------------------------------+-------------------+
-                    | (1) Streaming Metrics          ^
-                    v                                | (6) Safe Patches / Manifests
-+-------------------+--------------------------------+-------------------+
-|                           KubeMind Core Engine                         |
-|                                                                        |
-|  +-----------------------+              +---------------------------+  |
-|  | watcher/scan_cluster  |              | engine/remediator.sh      |  |
-|  +-----------+-----------+              +-------------^-------------+  |
-|              | (2) Resource Identifier                | (5) Filtered   |
-|              v                                        |     Execution  |
-|  +-----------+-----------+              +-------------+-------------+  |
-|  | engine/classifier.sh  |              | [Sanity Check Fallback]   |  |
-|  +-----------+-----------+              +-------------^-------------+  |
-|              | Check State Tokens                     |                |
-|              v                                        | (4) Remediation|
-|  +-----------+-----------+              +-------------+-------------+  |
-|  | engine/collector.sh   +------------->| ai/analyze.sh (Local LLM) |  |
-|  +-----------------------+  (3) Context +---------------------------+  |
-|                             Payload                                    |
-+------------------------------------------------------------------------+
-Immutable Lifecycle Adaptation Logic
-A standard platform operational trap is attempting to issue kubectl patch mutations to completely immutable structural elements—specifically Kubernetes Job resource matrices. KubeMind handles this by enforcing dynamic prompt logic. When the engine encounters a FailedJob, it drops the standard inline patch configuration strategy and switches to an immutable-safe structural paradigm:
+The system runs entirely locally and does not require external AI APIs.
 
-Delete the target resource entirely (kubectl delete job/...).
+---
 
-Create a clean state replacement manifest streamed via stdin blocks (kubectl apply -f - <<EOF).
+# 🏗 Current Architecture
 
-🛠️ Section 3: Project Structure & Workspace Layout
-Plaintext
-.
+```text
+Kubernetes Cluster
+        |
+        v
++-----------------------+
+| collector.sh          |
+| Collect pod context   |
++-----------------------+
+        |
+        v
+logs/context/*.txt
+        |
+        v
++-----------------------+
+| analyze.sh            |
+| Local LLM Analysis    |
+| (Ollama + Qwen)       |
++-----------------------+
+        |
+        v
+logs/remediation-plans/*.json
+        |
+        v
++-----------------------+
+| remediator.sh         |
+| Generate kubectl      |
+| remediation commands  |
++-----------------------+
+        |
+        v
+logs/remediation/*.txt
+```
+
+---
+
+# 📂 Project Structure
+
+```text
+kubemind/
+│
 ├── ai/
-│   ├── analyze.sh                # Manages localized Ollama API endpoint payloads
-│   ├── prompts/                  # Deep context ingestion files and system instructions
-│   └── schemas/                  # Strict JSON schema enforcement parameters
+│   ├── analyze.sh
+│   └── prompts/
+│       └── remediation_prompt.txt
+│
 ├── cmd/
-│   └── kubemind.sh               # Master execution wrapper (once / daemon modes)
-├── config/
-│   └── settings.env              # Global environment properties
+│   └── kubemind.sh
+│
 ├── engine/
-│   ├── classifier.sh             # Structural condition parser
-│   ├── collector.sh              # Context and cluster state aggregator
-│   ├── remediator.sh             # The core command syntax validation gate
-│   ├── reporter.sh               # Markdown incident generation engine
-│   └── verifier.sh               # Workload status post-execution probe
-├── kubernetes/test-apps/         # Local sandbox fault manifest architectures
-└── reports/                      # Full historical markdown audit reports
-🚀 Section 4: Local Infrastructure Run-Book
-Follow this operational configuration guide to spin up and test the complete self-healing verification pipeline locally on a workstation (such as an Apple Silicon MacBook or equivalent).
+│   ├── classifier.sh
+│   ├── collector.sh
+│   └── remediator.sh
+│
+├── kubernetes/
+│   └── test-apps/
+│
+├── logs/
+│   ├── context/
+│   ├── remediation/
+│   └── remediation-plans/
+│
+└── reports/
+```
 
-1. Local Prerequisites Configuration
-Ensure your workstation has the following core binaries globally accessible:
+---
 
-Minikube (v1.32+) or Docker Desktop
+# ⚙️ How It Works
 
-Ollama Engine (Active local daemon)
+## Step 1 — Context Collection
 
-jq (High-performance lightweight command-line JSON processor)
+```bash
+./engine/collector.sh <pod-name>
+```
 
-2. LLM Engine Initialization
-With your Ollama background daemon running, pull the optimized foundational model target:
+The collector gathers:
 
-Bash
+* Pod YAML
+* Pod description
+* Events
+* Current logs
+* Previous logs
+* Container status
+* Scheduling information
+* Owner workload details
+
+Output:
+
+```text
+logs/context/<pod>.txt
+```
+
+Example:
+
+```bash
+./engine/collector.sh crash-app-988bbf696-4rwtx
+```
+
+---
+
+## Step 2 — AI Analysis
+
+```bash
+./ai/analyze.sh <pod-name>
+```
+
+The analyzer:
+
+* Reads collected context
+* Sends it to Ollama
+* Uses a local LLM (Qwen)
+* Produces a remediation plan
+
+Output:
+
+```text
+logs/remediation-plans/<pod>.json
+```
+
+Example output:
+
+```json
+{
+  "resource_type": "Pod",
+  "resource_name": "broken-app",
+  "issue_type": "ImagePullBackOff",
+  "root_cause": "Image nginx:notfound does not exist",
+  "confidence": 100,
+  "remediation": [
+    {
+      "action_type": "update_image",
+      "target_kind": "Deployment",
+      "target_name": "broken-app",
+      "command": "kubectl set image deployment/broken-app nginx=nginx:latest -n kubemind",
+      "risk": "low",
+      "auto_executable": true
+    }
+  ],
+  "verification": [
+    "kubectl get pods -n kubemind"
+  ]
+}
+```
+
+---
+
+## Step 3 — Remediation Generation
+
+```bash
+./engine/remediator.sh <pod-name>
+```
+
+The remediator:
+
+* Reads AI-generated JSON
+* Extracts remediation actions
+* Produces executable kubectl commands
+
+Output:
+
+```text
+logs/remediation/<pod>.txt
+```
+
+---
+
+# 🧪 Supported Failure Scenarios
+
+Current test applications include:
+
+| Scenario         | Status |
+| ---------------- | ------ |
+| ImagePullBackOff | ✅      |
+| CrashLoopBackOff | ✅      |
+| OOMKilled        | ✅      |
+| Pending Pods     | ✅      |
+| Failed Jobs      | 🚧     |
+
+---
+
+# 🖥 Local Development Setup
+
+## Prerequisites
+
+Install:
+
+* Kubernetes cluster (Minikube or Docker Desktop)
+* kubectl
+* jq
+* Ollama
+
+---
+
+## Install Local Model
+
+Start Ollama:
+
+```bash
+ollama serve
+```
+
+Pull model:
+
+```bash
 ollama pull qwen3:8b
-3. Sandboxed Workload Provisioning
-Hydrate your cluster namespace with the standard testing failure suites included in the repository:
+```
 
-Bash
-# Initialize isolated validation space
+Verify:
+
+```bash
+ollama run qwen3:8b
+```
+
+---
+
+## Create Namespace
+
+```bash
 kubectl create namespace kubemind
+```
 
-# Hydrate sample cluster failure applications
-kubectl apply -f kubernetes/test-apps/broken-app.yaml -n kubemind
-kubectl apply -f kubernetes/test-apps/oom-app.yaml -n kubemind
-kubectl apply -f kubernetes/test-apps/failed-job.yaml -n kubemind
-4. Executing an Automated Diagnostics Sweep
-Wipe old tracing caches and trigger an end-to-end operational processing scan:
+---
 
-Bash
-# Setup persistent log directories
-mkdir -p logs/ai logs/context logs/remediation-plans reports state/processed
-touch logs/ai/.gitkeep logs/context/.gitkeep logs/remediation-plans/.gitkeep reports/.gitkeep state/processed/.gitkeep
+## Deploy Test Workloads
 
-# Reset pipeline token ledger history and run an intake sweep
-./cmd/kubemind.sh clear-state
-./cmd/kubemind.sh once
-Once executed, check your ./reports/ directory to review the deeply structured, fully populated Root Cause Analysis markdown documentation generated directly by the platform!
+```bash
+kubectl apply -f kubernetes/test-apps/
+```
+
+---
+
+# ▶ Example End-to-End Flow
+
+Collect context:
+
+```bash
+./engine/collector.sh broken-app-xxxx
+```
+
+Analyze with AI:
+
+```bash
+./ai/analyze.sh broken-app-xxxx
+```
+
+View generated remediation plan:
+
+```bash
+cat logs/remediation-plans/broken-app-xxxx.json
+```
+
+Generate commands:
+
+```bash
+./engine/remediator.sh broken-app-xxxx
+```
+
+View commands:
+
+```bash
+cat logs/remediation/broken-app-xxxx.txt
+```
+
+---
+
+# 🔮 Planned Features
+
+The long-term vision for KubeMind includes:
+
+* Continuous cluster scanning
+* Autonomous remediation execution
+* Risk-based approval workflows
+* JSON schema enforcement
+* Post-remediation verification
+* Incident report generation
+* Support for cluster-wide failures
+* Node health analysis
+* PDB analysis
+* Eviction analysis
+* Storage issue remediation
+* Network issue remediation
+* Multi-resource dependency graph analysis
+* GitOps integration
+* ArgoCD integration
+* Human approval gates
+
+---
+
+# 🎯 Vision
+
+KubeMind aims to evolve into a self-healing Kubernetes platform engineering agent capable of:
+
+1. Detecting failures automatically.
+2. Understanding root causes using AI.
+3. Generating safe remediation actions.
+4. Executing low-risk fixes autonomously.
+5. Verifying cluster health after remediation.
+
+The project follows an **AI-assisted but safety-first** design philosophy where AI recommendations are always validated before execution.

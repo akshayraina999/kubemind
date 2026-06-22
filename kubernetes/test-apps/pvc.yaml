@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: kubemind-test-pvc
+  namespace: kubemind
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: premium-ssd-failure # 🚨 Non-existent class to force a 'FailedBinding' event
+  resources:
+    requests:
+      storage: 10Gi

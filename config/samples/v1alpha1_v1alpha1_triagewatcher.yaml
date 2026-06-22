@@ -1,0 +1,9 @@
+apiVersion: v1alpha1.kubemind.io/v1alpha1
+kind: TriageWatcher
+metadata:
+  labels:
+    app.kubernetes.io/name: kubemind
+    app.kubernetes.io/managed-by: kustomize
+  name: triagewatcher-sample
+spec:
+  # TODO(user): Add fields here

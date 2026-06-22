@@ -1,0 +1,10 @@
+replicaCount: 1
+
+image:
+  repository: akshayraina/kubemind-operator
+  tag: "v0.1.0"
+  pullPolicy: IfNotPresent
+
+ollama:
+  url: "http://ollama.ollama.svc.cluster.local:11434"
+  model: "llama3"

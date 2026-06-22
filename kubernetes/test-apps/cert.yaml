@@ -1,0 +1,12 @@
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: kubemind-test-cert
+  namespace: kubemind
+spec:
+  secretName: kubemind-test-tls
+  dnsNames:
+    - app.kubemind.local
+  issuerRef:
+    name: dead-acme-issuer # 🚨 Non-existent issuer to force verification state failure
+    kind: ClusterIssuer

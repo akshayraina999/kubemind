@@ -14,4 +14,7 @@ logs/ai/*
 logs/pods/*
 logs/remediation/*
 logs/verification/*
-!logs/**/.gitkeep
+!logs/**/.gitkeepmain
+main
+kubernetes/test-apps/operator-config.yaml
+config/settings.env

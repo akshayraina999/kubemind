@@ -3,11 +3,13 @@ package watcher
 import (
 	"context"
 	"fmt"
+	"os"
 	"path/filepath"
 	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/util/homedir"
 )
@@ -28,11 +30,24 @@ type Scanner struct {
 
 // NewScanner builds a type-safe client configuration map connecting to the API server.
 func NewScanner(namespace string) (*Scanner, error) {
-	kubeconfig := filepath.Join(homedir.HomeDir(), ".kube", "config")
-	config, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
-	if err != nil {
-		return nil, fmt.Errorf("failed to build kubeconfig configurations: %w", err)
+	var config *rest.Config
+	var err error
+
+	// Check if running inside a Kubernetes cluster service account environment
+	if _, tokenErr := os.Stat("/var/run/secrets/kubernetes.io/serviceaccount/token"); tokenErr == nil {
+		config, err = rest.InClusterConfig()
+		if err != nil {
+			return nil, fmt.Errorf("failed to load in-cluster configuration: %w", err)
+		}
+	} else {
+		// Fallback to local workstation ~/.kube/config
+		kubeconfig := filepath.Join(homedir.HomeDir(), ".kube", "config")
+		config, err = clientcmd.BuildConfigFromFlags("", kubeconfig)
+		if err != nil {
+			return nil, fmt.Errorf("failed to build local kubeconfig configurations: %w", err)
+		}
 	}
+
 	clientset, err := kubernetes.NewForConfig(config)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize clientset interfaces: %w", err)
@@ -77,7 +92,6 @@ func (s *Scanner) CollectAnomalies() ([]Anomaly, error) {
 		for _, pvc := range pvcs.Items {
 			// If a PVC is stuck in Pending, it is an active anomaly regardless of age
 			if pvc.Status.Phase == "Pending" {
-				// 🔍 FIXED: Safely dereference the pointer with a fallback string to squash pointer address bugs
 				scName := "default"
 				if pvc.Spec.StorageClassName != nil {
 					scName = *pvc.Spec.StorageClassName

@@ -5,6 +5,9 @@ image:
   tag: "v0.1.0"
   pullPolicy: IfNotPresent
 
-ollama:
-  url: "http://ollama.ollama.svc.cluster.local:11434"
-  model: "llama3"
+# In charts/kubemind-operator/values.yaml
+env:
+  - name: OLLAMA_URL
+    value: "http://host.docker.internal:11434"
+  - name: MODEL_NAME
+    value: "qwen3:8b"

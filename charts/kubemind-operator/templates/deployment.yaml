@@ -20,10 +20,7 @@ spec:
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           env:
-            - name: OLLAMA_URL
-              value: {{ .Values.ollama.url | quote }}
-            - name: MODEL_NAME
-              value: {{ .Values.ollama.model | quote }}
+            {{- toYaml .Values.env | nindent 12 }}
           resources:
             limits:
               cpu: 500m

@@ -19,7 +19,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
-	v1alpha1 "github.com/akshayraina999/kubemind/api/v1alpha1"
+	v1alpha1 "github.com/akshayraina999/kubemind/internal/apis/v1alpha1"
 	"github.com/akshayraina999/kubemind/internal/ai"
 	"github.com/akshayraina999/kubemind/internal/engine"
 	"github.com/akshayraina999/kubemind/internal/watcher"
@@ -72,6 +72,7 @@ func sendOperatorSlackAlert(webhookURL, namespace, resourceName, targetKind, rea
 // +kubebuilder:rbac:groups=v1alpha1.kubemind.io,resources=triagewatchers/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups="",resources=secrets;pods;persistentvolumeclaims;events,verbs=get;list;watch
 // +kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch
+// +kubebuilder:rbac:groups=apps,resources=deployments;replicasets,verbs=get;list;watch
 // +kubebuilder:rbac:groups=networking.k8s.io,resources=ingresses,verbs=get;list;watch
 
 func (r *TriageWatcherReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
@@ -113,7 +114,7 @@ func (r *TriageWatcherReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	// 4. Initialize our sub-engines bound to this specific target namespace configuration
 	collectorEngine := engine.NewCollector(r.KubeClientset)
 	triageRouter := engine.NewTriageRouter(r.KubeClientset)
-	
+
 	// Pull environmental variables for local Ollama configurations
 	ollamaURL := os.Getenv("OLLAMA_URL")
 	if ollamaURL == "" {
@@ -163,27 +164,41 @@ func (r *TriageWatcherReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 
 		// Run async triage pipeline logic
 		go func(kind, name, podStr, reason, msg string) {
+			log := log.FromContext(context.Background()).WithValues("pod", podStr, "reason", reason)
+			log.Info("🎯 Intercepted anomaly. Initiating AI diagnostic pipeline...")
+
 			manifestSnippet, err := triageRouter.FetchManifestSnippet(targetNS, kind, name)
 			if err != nil {
 				manifestSnippet = fmt.Sprintf("# Warning: Could not harvest spec for %s: %v", kind, err)
 			}
 
-			telemetryData, err := collectorEngine.FetchPodLogs(targetNS, podStr)
-			if err != nil {
-				telemetryData = fmt.Sprintf("Fallback context text details: %s", msg)
+			// Fetch container logs only if it's not a pulling or configuration block
+			var telemetryData string
+			if reason == "ImagePullBackOff" || reason == "ErrImagePull" || reason == "CreateContainerConfigError" {
+				log.Info("⚠️ Container hasn't started yet. Utilizing event description messages for context...")
+				telemetryData = fmt.Sprintf("Kubernetes Event Message: %s", msg)
+			} else {
+				telemetryData, err = collectorEngine.FetchPodLogs(targetNS, podStr)
+				if err != nil {
+					log.Error(err, "Failed to pull container log streams; falling back to description.")
+					telemetryData = fmt.Sprintf("Fallback context text details: %s", msg)
+				}
 			}
 
-			compiledPrompt := fmt.Sprintf("%s\n\n[CONTEXT]:\nTarget Object: %s/%s\nTelemetry:\n%s\nError Message:\n%s", 
-				string(systemPromptBytes), kind, name, telemetryData, msg)
+			compiledPrompt := fmt.Sprintf("%s\n\n[CONTEXT]:\nTarget Object: %s/%s\nTelemetry:\n%s\nError Message:\n%s\nActive Manifest YAML Snippet:\n%s",
+				string(systemPromptBytes), kind, name, telemetryData, msg, manifestSnippet)
 
+			log.Info("🧠 Forwarding diagnostic payload to local Ollama instance...")
 			rawJSONPlan, err := aiClient.Generate(compiledPrompt, true)
 			if err != nil {
+				log.Error(err, "❌ Ollama inference engine failed to compile remediation layout.")
 				r.TrackMutex.Lock()
 				delete(r.LastAlerted, snoozeKey)
 				r.TrackMutex.Unlock()
 				return
 			}
 
+			log.Info("📤 Remediation plan synthesized successfully. Shipping alert to Slack...")
 			sendOperatorSlackAlert(slackURL, targetNS, name, kind, reason, rawJSONPlan, manifestSnippet)
 		}(targetKind, targetResourceName, rawPodName, anomaly.Reason, anomaly.Message)
 	}

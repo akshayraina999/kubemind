@@ -36,8 +36,8 @@ import (
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
-	v1alpha1v1alpha1 "github.com/akshayraina999/kubemind/api/v1alpha1"
-	"github.com/akshayraina999/kubemind/internal/controller"
+	v1alpha1v1alpha1 "github.com/akshayraina999/kubemind/internal/apis/v1alpha1"
+	"github.com/akshayraina999/kubemind/internal/controllers"
 	// +kubebuilder:scaffold:imports
 )
 

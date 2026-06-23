@@ -1,321 +1,282 @@
-# 🧠 KubeMind
+# 🚀 Getting Started with KubeMind Operator
 
-KubeMind is an AI-assisted Kubernetes troubleshooting engine that collects cluster context, analyzes failing workloads using a local LLM, and generates structured remediation plans.
+Welcome to the **`refactor/kubemind-operator`** branch.
 
-The project is designed as the foundation for a future self-healing Kubernetes platform engineering agent.
+This branch introduces **KubeMind Operator**, a Kubernetes-native Day-2 Operations platform built using the standard Go project layout and deployed as a Kubernetes Operator.
 
----
-
-# 🚀 What KubeMind Does Today
-
-KubeMind currently performs four major tasks:
-
-1. **Collects detailed Kubernetes context**
-2. **Identifies failing workloads**
-3. **Sends workload context to a local LLM (Ollama)**
-4. **Generates remediation recommendations in structured JSON**
-
-The system runs entirely locally and does not require external AI APIs.
+The operator continuously watches cluster resources, detects anomalies, gathers diagnostics, and leverages a locally hosted Large Language Model (LLM) running through Ollama to generate AI-assisted root cause analysis and remediation suggestions.
 
 ---
 
-# 🏗 Current Architecture
+# 🏗️ Architecture Overview
+
+KubeMind follows a hybrid architecture where the operator runs inside Kubernetes while AI inference remains local on your workstation.
 
 ```text
-Kubernetes Cluster
-        |
-        v
-+-----------------------+
-| collector.sh          |
-| Collect pod context   |
-+-----------------------+
-        |
-        v
-logs/context/*.txt
-        |
-        v
-+-----------------------+
-| analyze.sh            |
-| Local LLM Analysis    |
-| (Ollama + Qwen)       |
-+-----------------------+
-        |
-        v
-logs/remediation-plans/*.json
-        |
-        v
-+-----------------------+
-| remediator.sh         |
-| Generate kubectl      |
-| remediation commands  |
-+-----------------------+
-        |
-        v
-logs/remediation/*.txt
+Kubernetes Cluster Anomalies
+(Pods, PVCs, Jobs, Nodes, etc.)
+                │
+                ▼
+       KubeMind Operator
+  (Watches cluster events & states)
+                │
+                ▼
+    Builds Diagnostic Context
+                │
+                ▼
+Routes Context over Internal DNS Bridge
+                │
+                ▼
+ollama-local.kubemind-system.svc.cluster.local
+                │
+                ▼
+Local Workstation Running Ollama
+            (qwen3:8b)
+                │
+        ┌───────┴────────┐
+        ▼                ▼
+Root Cause        Remediation
+ Analysis          Suggestions
+        │                │
+        └───────┬────────┘
+                ▼
+       Slack Incident Alerts
 ```
 
 ---
 
-# 📂 Project Structure
+# 🛠️ Prerequisites
 
-```text
-kubemind/
-│
-├── ai/
-│   ├── analyze.sh
-│   └── prompts/
-│       └── remediation_prompt.txt
-│
-├── cmd/
-│   └── kubemind.sh
-│
-├── engine/
-│   ├── classifier.sh
-│   ├── collector.sh
-│   └── remediator.sh
-│
-├── kubernetes/
-│   └── test-apps/
-│
-├── logs/
-│   ├── context/
-│   ├── remediation/
-│   └── remediation-plans/
-│
-└── reports/
-```
+Before running KubeMind, ensure the following tools are installed and available in your shell.
 
----
+| Tool               | Minimum Version   | Purpose                        |
+| ------------------ | ----------------- | ------------------------------ |
+| Go                 | 1.20+             | Compile and run the operator   |
+| Docker             | 20.10+            | Build container images         |
+| Helm               | v3+               | Package and deploy charts      |
+| kubectl            | v1.24+            | Interact with Kubernetes       |
+| Kubernetes Cluster | Any local cluster | Minikube, Kind, Docker Desktop |
+| Ollama             | Latest            | Local AI inference engine      |
 
-# ⚙️ How It Works
-
-## Step 1 — Context Collection
+Verify your environment:
 
 ```bash
-./engine/collector.sh <pod-name>
-```
-
-The collector gathers:
-
-* Pod YAML
-* Pod description
-* Events
-* Current logs
-* Previous logs
-* Container status
-* Scheduling information
-* Owner workload details
-
-Output:
-
-```text
-logs/context/<pod>.txt
-```
-
-Example:
-
-```bash
-./engine/collector.sh crash-app-988bbf696-4rwtx
+go version
+docker version
+helm version --short
+kubectl version --client
 ```
 
 ---
 
-## Step 2 — AI Analysis
+# 🧠 Local AI Engine Setup (Ollama)
+
+KubeMind uses a locally hosted LLM to provide:
+
+* Complete data privacy
+* No cloud inference costs
+* Faster diagnostics
+* Offline troubleshooting capabilities
+
+## Install Ollama
+
+Download and install Ollama from:
+
+https://ollama.com
+
+## Download and Run the Model
+
+KubeMind is optimized for the **Qwen 3 8B** model.
 
 ```bash
-./ai/analyze.sh <pod-name>
-```
+# Optional: Enable parallel inference
+export OLLAMA_NUM_PARALLEL=4
 
-The analyzer:
-
-* Reads collected context
-* Sends it to Ollama
-* Uses a local LLM (Qwen)
-* Produces a remediation plan
-
-Output:
-
-```text
-logs/remediation-plans/<pod>.json
-```
-
-Example output:
-
-```json
-{
-  "resource_type": "Pod",
-  "resource_name": "broken-app",
-  "issue_type": "ImagePullBackOff",
-  "root_cause": "Image nginx:notfound does not exist",
-  "confidence": 100,
-  "remediation": [
-    {
-      "action_type": "update_image",
-      "target_kind": "Deployment",
-      "target_name": "broken-app",
-      "command": "kubectl set image deployment/broken-app nginx=nginx:latest -n kubemind",
-      "risk": "low",
-      "auto_executable": true
-    }
-  ],
-  "verification": [
-    "kubectl get pods -n kubemind"
-  ]
-}
-```
-
----
-
-## Step 3 — Remediation Generation
-
-```bash
-./engine/remediator.sh <pod-name>
-```
-
-The remediator:
-
-* Reads AI-generated JSON
-* Extracts remediation actions
-* Produces executable kubectl commands
-
-Output:
-
-```text
-logs/remediation/<pod>.txt
-```
-
----
-
-# 🧪 Supported Failure Scenarios
-
-Current test applications include:
-
-| Scenario         | Status |
-| ---------------- | ------ |
-| ImagePullBackOff | ✅      |
-| CrashLoopBackOff | ✅      |
-| OOMKilled        | ✅      |
-| Pending Pods     | ✅      |
-| Failed Jobs      | 🚧     |
-
----
-
-# 🖥 Local Development Setup
-
-## Prerequisites
-
-Install:
-
-* Kubernetes cluster (Minikube or Docker Desktop)
-* kubectl
-* jq
-* Ollama
-
----
-
-## Install Local Model
-
-Start Ollama:
-
-```bash
-ollama serve
-```
-
-Pull model:
-
-```bash
+# Download model
 ollama pull qwen3:8b
-```
 
-Verify:
-
-```bash
+# Start local inference server
 ollama run qwen3:8b
 ```
 
----
-
-## Create Namespace
+## Verify Ollama
 
 ```bash
+curl http://localhost:11434
+```
+
+Expected output:
+
+```text
+Ollama is running
+```
+
+---
+
+# 🌐 Networking Architecture
+
+The KubeMind Operator runs inside Kubernetes, while Ollama runs on your workstation.
+
+Because Pods cannot directly access your local `localhost`, KubeMind uses a Kubernetes DNS bridge.
+
+```text
+Operator Pod
+      │
+      ▼
+ollama-local.kubemind-system.svc.cluster.local
+      │
+      ▼
+ExternalName Service
+      │
+      ▼
+host.docker.internal
+      │
+      ▼
+Local Ollama Server (Port 11434)
+```
+
+This approach eliminates the need for hardcoded workstation IP addresses.
+
+---
+
+# 🚀 Production Deployment Guide
+
+## Step 1 — Create Namespaces
+
+```bash
+kubectl create namespace kubemind-system
 kubectl create namespace kubemind
 ```
 
 ---
 
-## Deploy Test Workloads
+## Step 2 — Configure Slack Notifications
+
+Create the Slack webhook secret used by KubeMind to send incident notifications.
 
 ```bash
-kubectl apply -f kubernetes/test-apps/
+kubectl create secret generic slack-secret \
+  --from-literal=webhook-url="https://hooks.slack.com/services/YOUR/WEBHOOK/URL" \
+  -n kubemind-system
 ```
 
 ---
 
-# ▶ Example End-to-End Flow
+## Step 3 — Deploy the Ollama Bridge
 
-Collect context:
+Apply the networking bridge manifest:
 
 ```bash
-./engine/collector.sh broken-app-xxxx
+kubectl apply -f deploy/test-apps/ollama-bridge.yaml
 ```
 
-Analyze with AI:
+Example bridge:
 
-```bash
-./ai/analyze.sh broken-app-xxxx
-```
-
-View generated remediation plan:
-
-```bash
-cat logs/remediation-plans/broken-app-xxxx.json
-```
-
-Generate commands:
-
-```bash
-./engine/remediator.sh broken-app-xxxx
-```
-
-View commands:
-
-```bash
-cat logs/remediation/broken-app-xxxx.txt
+```yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: ollama-local
+  namespace: kubemind-system
+spec:
+  type: ExternalName
+  externalName: host.docker.internal
 ```
 
 ---
 
-# 🔮 Planned Features
+## Step 4 — Build the Operator Image
 
-The long-term vision for KubeMind includes:
-
-* Continuous cluster scanning
-* Autonomous remediation execution
-* Risk-based approval workflows
-* JSON schema enforcement
-* Post-remediation verification
-* Incident report generation
-* Support for cluster-wide failures
-* Node health analysis
-* PDB analysis
-* Eviction analysis
-* Storage issue remediation
-* Network issue remediation
-* Multi-resource dependency graph analysis
-* GitOps integration
-* ArgoCD integration
-* Human approval gates
+```bash
+docker build -t akshayraina/kubemind-operator:v0.1.0 .
+```
 
 ---
 
-# 🎯 Vision
+## Step 5 — Install the Helm Chart
 
-KubeMind aims to evolve into a self-healing Kubernetes platform engineering agent capable of:
+```bash
+helm install kubemind-operator charts/kubemind-operator \
+  --namespace kubemind-system \
+  --set image.pullPolicy=Always
+```
 
-1. Detecting failures automatically.
-2. Understanding root causes using AI.
-3. Generating safe remediation actions.
-4. Executing low-risk fixes autonomously.
-5. Verifying cluster health after remediation.
+---
 
-The project follows an **AI-assisted but safety-first** design philosophy where AI recommendations are always validated before execution.
+## Step 6 — Verify Deployment
+
+Check that the operator Pod is running:
+
+```bash
+kubectl get pods -n kubemind-system
+```
+
+Stream operator logs:
+
+```bash
+kubectl logs \
+  -n kubemind-system \
+  -l app.kubernetes.io/name=kubemind-operator \
+  -f
+```
+
+---
+
+# 🖥️ Local Development Mode
+
+During active development, you can run the operator directly from source without rebuilding containers.
+
+Configure environment variables:
+
+```bash
+export OLLAMA_URL="http://localhost:11434"
+export MODEL_NAME="qwen3:8b"
+```
+
+Start the operator:
+
+```bash
+go run ./cmd/manager/main.go
+```
+
+---
+
+# 🧪 Validation Workflows
+
+Deploy intentionally broken workloads to validate the end-to-end troubleshooting pipeline.
+
+```bash
+kubectl apply -f deploy/test-apps/restart-app.yaml -n kubemind
+
+kubectl apply -f deploy/test-apps/crash-app.yaml -n kubemind
+
+kubectl apply -f deploy/test-apps/oom-app.yaml -n kubemind
+```
+
+Once deployed, KubeMind will:
+
+1. Detect the anomaly.
+2. Gather cluster diagnostics.
+3. Generate structured AI analysis.
+4. Produce remediation suggestions.
+5. Send formatted incident reports to Slack.
+
+---
+
+# 🧹 Cleanup & Teardown
+
+Remove the operator and all test resources:
+
+```bash
+helm uninstall kubemind-operator -n kubemind-system
+
+kubectl delete ns kubemind
+
+kubectl delete svc ollama-local -n kubemind-system
+```
+
+---
+
+# 🎉 Success
+
+Your KubeMind Operator is now fully configured and ready to perform AI-assisted Kubernetes Day-2 operations, diagnostics, and incident triage.

@@ -27,7 +27,7 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	v1alpha1v1alpha1 "github.com/akshayraina999/kubemind/api/v1alpha1"
+	v1alpha1v1alpha1 "github.com/akshayraina999/kubemind/internal/apis/v1alpha1"
 )
 
 var _ = Describe("TriageWatcher Controller", func() {

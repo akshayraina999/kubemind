@@ -16,5 +16,7 @@ logs/remediation/*
 logs/verification/*
 !logs/**/.gitkeepmain
 main
-kubernetes/test-apps/operator-config.yaml
+deploy/test-apps/operator-config.yaml
 config/settings.env
+bin/
+deploy/test-apps/operator-config.yaml

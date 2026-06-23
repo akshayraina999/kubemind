@@ -5,6 +5,34 @@ metadata:
   name: manager-role
 rules:
 - apiGroups:
+  - ""
+  resources:
+  - events
+  - persistentvolumeclaims
+  - pods
+  - secrets
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - apps
+  resources:
+  - deployments
+  - replicasets
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - networking.k8s.io
+  resources:
+  - ingresses
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
   - v1alpha1.kubemind.io
   resources:
   - triagewatchers
@@ -16,12 +44,6 @@ rules:
   - patch
   - update
   - watch
-- apiGroups:
-  - v1alpha1.kubemind.io
-  resources:
-  - triagewatchers/finalizers
-  verbs:
-  - update
 - apiGroups:
   - v1alpha1.kubemind.io
   resources:
